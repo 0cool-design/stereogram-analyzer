@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stereogram Analyzer — recover the hidden depth in Magic Eye images</title>
+    <meta
+      name="description"
+      content="A live, in-browser tool that recovers the hidden 3D structure encoded in single-image autostereograms (Magic Eye). Estimates pattern period, recovers the base texture, builds a depth map, and renders the surface in 3D."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Spline+Sans+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <div class="mast-left">
+        <div class="eyebrow">OPTICAL&nbsp;·&nbsp;DEPTH&nbsp;·&nbsp;LAB</div>
+        <h1>Stereogram<span>Analyzer</span></h1>
+        <p class="tagline">
+          Recover the hidden 3D surface encoded inside a single
+          <em>autostereogram</em> — the “Magic&nbsp;Eye” illusion — entirely in
+          your browser.
+        </p>
+      </div>
+      <a
+        class="repo-link"
+        href="https://github.com/0cool-design/stereogram-analyzer"
+        target="_blank"
+        rel="noopener"
+        >source ↗</a
+      >
+    </header>
+
+    <main class="workbench">
+      <!-- ───────────────── control column ───────────────── -->
+      <aside class="panel controls">
+        <section class="block">
+          <h2 class="block-title">01 · Input</h2>
+          <div id="dropzone" class="dropzone">
+            <input id="file" type="file" accept="image/*" hidden />
+            <div class="dz-inner">
+              <div class="dz-icon">⌖</div>
+              <p><strong>Drop</strong> a stereogram<br />or click to browse</p>
+              <small>PNG · JPG · BMP</small>
+            </div>
+          </div>
+          <button id="sample" class="btn ghost full">
+            ⬡ Generate a sample stereogram
+          </button>
+        </section>
+
+        <section class="block">
+          <h2 class="block-title">02 · Parameters</h2>
+          <label class="field">
+            <span>Analysis width<i>px — larger = slower</i></span>
+            <select id="analysisWidth">
+              <option value="320">320</option>
+              <option value="420" selected>420</option>
+              <option value="560">560</option>
+              <option value="720">720</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Min period<i id="minPeriodVal">24</i></span>
+            <input id="minPeriod" type="range" min="8" max="96" value="24" />
+          </label>
+          <label class="field">
+            <span>Max extra shift<i id="maxShiftVal">16</i></span>
+            <input id="maxShift" type="range" min="2" max="40" value="16" />
+          </label>
+          <label class="field">
+            <span>Window radius<i id="windowVal">5</i></span>
+            <input id="window" type="range" min="1" max="15" value="5" />
+          </label>
+          <label class="field">
+            <span>Depth exaggeration<i id="exaggVal">50</i></span>
+            <input id="exagg" type="range" min="5" max="150" value="50" />
+          </label>
+        </section>
+
+        <section class="block">
+          <button id="analyze" class="btn primary full" disabled>
+            ▶ Analyze
+          </button>
+          <div id="progress" class="progress" hidden>
+            <div class="bar"><i id="progressBar"></i></div>
+            <span id="progressLabel">working…</span>
+          </div>
+          <dl class="readout">
+            <div><dt>Period</dt><dd id="outPeriod">—</dd></div>
+            <div><dt>Resolution</dt><dd id="outRes">—</dd></div>
+          </dl>
+        </section>
+
+        <section class="block">
+          <h2 class="block-title">03 · Export</h2>
+          <div class="export-grid">
+            <button id="saveTexture" class="btn ghost" disabled>Texture PNG</button>
+            <button id="saveDepth" class="btn ghost" disabled>Depth PNG</button>
+            <button id="saveObj" class="btn ghost" disabled>Point cloud OBJ</button>
+          </div>
+        </section>
+      </aside>
+
+      <!-- ───────────────── viewport column ───────────────── -->
+      <section class="panel stage">
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-view="original" role="tab">Original</button>
+          <button class="tab" data-view="texture" role="tab">Base texture</button>
+          <button class="tab" data-view="depth" role="tab">Depth map</button>
+          <button class="tab" data-view="surface" role="tab">3D surface</button>
+        </nav>
+
+        <div class="views">
+          <div class="view active" data-view="original">
+            <canvas id="canvasOriginal"></canvas>
+            <p class="placeholder" id="placeholder">
+              Load an image or generate a sample, then press
+              <strong>Analyze</strong>.<br />
+              <span class="hint"
+                >Tip: relax your eyes and look “through” a stereogram to see its
+                hidden shape — this tool recovers it mathematically.</span
+              >
+            </p>
+          </div>
+          <div class="view" data-view="texture">
+            <canvas id="canvasTexture"></canvas>
+          </div>
+          <div class="view" data-view="depth">
+            <canvas id="canvasDepth"></canvas>
+          </div>
+          <div class="view" data-view="surface">
+            <div id="surface"></div>
+            <div class="surface-hint">drag to orbit · scroll to zoom</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="colophon">
+      <span>Pipeline: autocorrelation period estimation → tile averaging →
+        windowed block-matching disparity → normalized depth.</span>
+      <span>Runs 100% client-side. Ported from the PyQt5 desktop tool.</span>
+    </footer>
+
+    <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.149.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="assets/stereogram.js"></script>
+    <script src="assets/app.js"></script>
+  </body>
+</html>
